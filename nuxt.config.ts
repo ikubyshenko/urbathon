@@ -4,10 +4,13 @@ export default defineNuxtConfig({
     '@nuxtjs/tailwindcss'
   ],
   runtimeConfig: {
-    openrouterApiKey: process.env.OPENROUTER_API_KEY,
+    openrouterApiKey: process.env.OPENROUTER_API_KEY || '',
     public: {
-      appName: 'Бытовой AI Помощник',
-      siteUrl: 'http://localhost:3000'
+      appName: 'Skohub Urbathon',
+      siteUrl: process.env.NUXT_PUBLIC_SITE_URL || 'https://skohuburbathon.vercel.app/'
     }
+  },
+  nitro: {
+    preset: 'vercel'
   }
 })

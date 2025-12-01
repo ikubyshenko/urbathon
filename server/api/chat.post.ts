@@ -12,13 +12,20 @@ export default defineEventHandler(async (event) => {
     const config = useRuntimeConfig()
     const apiKey = config.openrouterApiKey
 
+    console.log('API Key check:', {
+      hasKey: !!apiKey,
+      length: apiKey ? apiKey.length : 0,
+      env: process.env.NODE_ENV
+    })
+
     if (!apiKey) {
+      console.error('API ключ отсутствует')
       return {
         error: 'API ключ не настроен'
       }
     }
 
-    // Упрощенный системный промпт
+    // Системный промпт
     const systemPrompt = `Ты - опытный бытовой помощник для жителей Казахстана. Отвечай на русском языке.
 
 ВАЖНЫЕ ПРАВИЛА:
@@ -37,48 +44,58 @@ export default defineEventHandler(async (event) => {
 
 Твоя задача - помогать с бытовыми проблемами: ремонт, уборка, организация пространства.`
 
-    const response = await $fetch('https://openrouter.ai/api/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`,
-        'HTTP-Referer': 'http://localhost:3000',
-        'X-Title': 'Household Assistant'
-      },
-      body: {
-        model: 'x-ai/grok-4.1-fast:free',
-        messages: [
-          {
-            role: 'system',
-            content: systemPrompt
-          },
-          {
-            role: 'user', 
-            content: message
-          }
-        ],
-        max_tokens: 1500,
-        temperature: 0.7
+    try {
+      const response = await $fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`,
+          'HTTP-Referer': config.public.siteUrl,
+          'X-Title': 'БытМастер Казахстан'
+        },
+        body: {
+          model: 'x-ai/grok-4.1-fast:free',
+          messages: [
+            {
+              role: 'system',
+              content: systemPrompt
+            },
+            {
+              role: 'user', 
+              content: message
+            }
+          ],
+          max_tokens: 1500,
+          temperature: 0.7
+        }
+      })
+
+      const aiResponse = response.choices[0]?.message?.content
+
+      if (!aiResponse) {
+        return {
+          error: 'AI не ответил'
+        }
       }
-    })
 
-    const aiResponse = response.choices[0]?.message?.content
-
-    if (!aiResponse) {
       return {
-        error: 'AI не ответил'
+        message: aiResponse,
+        model: response.model
       }
-    }
 
-    return {
-      message: aiResponse,
-      model: response.model
+    } catch (fetchError: any) {
+      console.error('OpenRouter fetch error:', fetchError)
+      
+      // Возвращаем более информативную ошибку
+      return {
+        error: `Ошибка API: ${fetchError.status || 'unknown'} - ${fetchError.message || 'Неизвестная ошибка'}`
+      }
     }
 
   } catch (error: any) {
-    console.error('OpenRouter API error:', error)
+    console.error('Server error:', error)
     return {
-      error: 'Ошибка соединения с AI'
+      error: 'Внутренняя ошибка сервера'
     }
   }
 })
