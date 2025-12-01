@@ -11,91 +11,89 @@ export default defineEventHandler(async (event) => {
 
     const config = useRuntimeConfig()
     const apiKey = config.openrouterApiKey
-
-    console.log('API Key check:', {
+    
+    console.log('Vercel API Key check:', {
       hasKey: !!apiKey,
       length: apiKey ? apiKey.length : 0,
-      env: process.env.NODE_ENV
+      env: process.env.NODE_ENV,
+      vercelUrl: process.env.VERCEL_URL
     })
 
     if (!apiKey) {
-      console.error('API ключ отсутствует')
+      console.error('❌ API ключ отсутствует на Vercel!')
       return {
-        error: 'API ключ не настроен'
+        error: 'API ключ не настроен на сервере'
       }
     }
 
-    // Системный промпт
-    const systemPrompt = `Ты - опытный бытовой помощник для жителей Казахстана. Отвечай на русском языке.
+    // Упрощенный промпт
+    const systemPrompt = `Ты помощник по бытовым вопросам для Казахстана. Отвечай на русском языке. Цены в тенге.`
 
-ВАЖНЫЕ ПРАВИЛА:
-1. Все цены указывай в тенге (₸)
-2. Не используй маркдаун символы (#, *, и т.д.)
-3. Пиши чистым текстом с красивым форматированием
-4. Упоминай казахстанские магазины (мелодия дома, технодом, сулпак и т.д.)
-5. Давай практичные советы для местных условий
-6. Всегда в конце пиши - Разработанно командой Palmyass для Urbathon SKO Hub
+    const response = await $fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`,
+        'HTTP-Referer': config.public.siteUrl,
+        'X-Title': 'БытМастер Казахстан'
+      },
+      body: {
+        model: 'x-ai/grok-4.1-fast:free',
+        messages: [
+          {
+            role: 'system',
+            content: systemPrompt
+          },
+          {
+            role: 'user', 
+            content: message
+          }
+        ],
+        max_tokens: 1000,
+        temperature: 0.7
+      },
+      timeout: 10000 // 10 секунд timeout
+    })
 
-Форматируй ответ так:
-- Используй переносы строк для абзацев
-- Выделяй важное жирным шрифтом (без символов)
-- Используй списки с точками
-- Пиши понятно и по делу
+    const aiResponse = response.choices[0]?.message?.content
 
-Твоя задача - помогать с бытовыми проблемами: ремонт, уборка, организация пространства.`
-
-    try {
-      const response = await $fetch('https://openrouter.ai/api/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiKey}`,
-          'HTTP-Referer': config.public.siteUrl,
-          'X-Title': 'БытМастер Казахстан'
-        },
-        body: {
-          model: 'x-ai/grok-4.1-fast:free',
-          messages: [
-            {
-              role: 'system',
-              content: systemPrompt
-            },
-            {
-              role: 'user', 
-              content: message
-            }
-          ],
-          max_tokens: 1500,
-          temperature: 0.7
-        }
-      })
-
-      const aiResponse = response.choices[0]?.message?.content
-
-      if (!aiResponse) {
-        return {
-          error: 'AI не ответил'
-        }
-      }
-
+    if (!aiResponse) {
       return {
-        message: aiResponse,
-        model: response.model
+        error: 'AI не ответил'
       }
+    }
 
-    } catch (fetchError: any) {
-      console.error('OpenRouter fetch error:', fetchError)
-      
-      // Возвращаем более информативную ошибку
-      return {
-        error: `Ошибка API: ${fetchError.status || 'unknown'} - ${fetchError.message || 'Неизвестная ошибка'}`
-      }
+    console.log('✅ Успешный ответ от OpenRouter на Vercel')
+    
+    return {
+      message: aiResponse,
+      model: response.model
     }
 
   } catch (error: any) {
-    console.error('Server error:', error)
+    console.error('❌ OpenRouter error on Vercel:', {
+      message: error.message,
+      status: error.status,
+      data: error.data
+    })
+    
+    // Более детальные ошибки
+    if (error.status === 401) {
+      return {
+        error: 'Неверный API ключ OpenRouter'
+      }
+    } else if (error.status === 429) {
+      return {
+        error: 'Превышен лимит запросов к OpenRouter'
+      }
+    } else if (error.status === 404) {
+      return {
+        error: 'Модель не найдена на OpenRouter'
+      }
+    }
+    
     return {
-      error: 'Внутренняя ошибка сервера'
+      error: `Ошибка OpenRouter: ${error.message || 'Неизвестная ошибка'}`
     }
   }
 })
